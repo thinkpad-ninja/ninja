@@ -74,6 +74,10 @@ cp ~/.bashrc ~/conf/home/.bashrc
 
 find ~/conf -mindepth 2 -name .git -exec rm -rf {} +
 
+# Strip editor/omarchy backup junk picked up from the real configs
+# (e.g. hypr bindings.conf.bak.<timestamp>) so it never gets committed.
+find ~/conf -mindepth 2 \( -name '*.bak' -o -name '*.bak.*' -o -name '*~' -o -name '*.orig' \) -delete
+
 git add .
 git commit -m "$VERSION"
 git tag $VERSION
