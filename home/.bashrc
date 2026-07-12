@@ -171,6 +171,57 @@ delete_snapshots() {
 alias filesystem_usage='sudo btrfs filesystem usage /'
 alias filesystem_balance='sudo btrfs balance start -dusage=50 /'
 alias diskcheck='sudo btrfs filesystem usage / | grep -E "unallocated|Metadata"'
+# Прогресс/отмена balance (можно прерывать без вреда для ФС)
+alias filesystem_balance_status='sudo btrfs balance status /'
+alias filesystem_balance_cancel='sudo btrfs balance cancel /'
+
+# Экстренное лечение ENOSPC на btrfs (unallocated = 1 MiB, метадате некуда
+# писать, rm/balance висят): временно добавить 4G loop-устройство из RAM.
+# https://claude.ai/chat/c787ae96-1871-4e98-b7f5-384abeef48b2
+btrfs_rescue_add() {
+    truncate -s 4G /dev/shm/r.img || return 1
+    local l; l="$(sudo losetup --show -f /dev/shm/r.img)" || return 1
+    sudo btrfs device add -f "$l" / && echo "added $l — now free space (rm), then run btrfs_rescue_remove $l"
+}
+# Ultimate balance: работает даже при unallocated = 1 MiB, когда обычный
+# balance падает с ENOSPC. Полная последовательность из того же треда:
+# 4G loop из RAM -> device add -> balance -> device remove -> losetup -d -> rm img.
+# Каждый шаг проверяется; loop никогда не остаётся висеть в пуле.
+# При Ctrl+C во время balance: filesystem_balance_cancel, потом btrfs_rescue_remove <loop>.
+force_filesystem_balance() {
+    local img=/dev/shm/r.img l rc=0
+    if [ -e "$img" ]; then
+        echo "force_filesystem_balance: $img уже существует — прошлый запуск не убрался?" >&2
+        echo "Провери 'losetup -a' и 'sudo btrfs filesystem show /', потом btrfs_rescue_remove <loop>." >&2
+        return 1
+    fi
+    truncate -s 4G "$img" || return 1
+    if ! l="$(sudo losetup --show -f "$img")"; then rm -f "$img"; return 1; fi
+    if ! sudo btrfs device add -f "$l" /; then
+        sudo losetup -d "$l"; rm -f "$img"; return 1
+    fi
+    echo ">>> loop $l добавлен, запускаю balance (можно смотреть filesystem_balance_status в другом TTY)"
+    sudo btrfs balance start -dusage=50 / || rc=$?
+    echo ">>> убираю $l из пула"
+    if ! sudo btrfs device remove "$l" /; then
+        echo "device remove не прошёл — loop $l ещё в пуле! Добей вручную: btrfs_rescue_remove $l" >&2
+        return 1
+    fi
+    sudo losetup -d "$l"
+    rm -f "$img"
+    sudo btrfs filesystem usage / | grep -i unallocated
+    return $rc
+}
+
+# Убрать loop обратно: balance -> device remove -> losetup -d -> rm img
+btrfs_rescue_remove() {
+    local l="${1:-/dev/loop0}"
+    sudo btrfs balance start -dusage=50 /
+    sudo btrfs device remove "$l" / || return 1
+    sudo losetup -d "$l"
+    rm -f /dev/shm/r.img
+    sudo btrfs filesystem usage / | grep -i unallocated
+}
 
 # ---------- Ranger (cd-on-quit) ----------
 n() {
