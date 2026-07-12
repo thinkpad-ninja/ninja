@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Disable espanso forever: stop it, unregister its systemd user unit,
+# and mask the service so nothing can start it on boot (or via re-register).
+
+UNIT="$HOME/.config/systemd/user/espanso.service"
+
+espanso stop 2>/dev/null || true
+espanso service unregister 2>/dev/null || true
+
+systemctl --user stop espanso 2>/dev/null || true
+systemctl --user disable espanso 2>/dev/null || true
+systemctl --user daemon-reload 2>/dev/null || true
+
+# unregister leaves no unit file; mask needs the name free
+[ -e "$UNIT" ] && [ ! -L "$UNIT" ] && rm -f "$UNIT"
+
+systemctl --user mask espanso 2>/dev/null || true
+
+echo "espanso: $(systemctl --user is-enabled espanso 2>/dev/null) / $(systemctl --user is-active espanso 2>/dev/null)"

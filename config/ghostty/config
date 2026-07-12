@@ -1,0 +1,69 @@
+# Dynamic theme colors (follows Omarchy system theme)
+config-file = ?"~/.config/omarchy/current/theme/ghostty.conf"
+
+# Font
+font-family = "JetBrainsMono Nerd Font"
+font-style = Regular
+font-size = 9
+
+# Window
+window-theme = ghostty
+
+# Silence Claude Code "waiting for your input" popups (and all app desktop notifications)
+desktop-notifications = false
+window-padding-x = 14
+window-padding-y = 14
+confirm-close-surface=false
+resize-overlay = never
+gtk-toolbar-style = flat
+
+# Cursor styling
+cursor-style = "block"
+cursor-style-blink = false
+
+# Cursor styling + SSH session terminfo
+# (all shell integration options must be passed together)
+shell-integration-features = no-cursor,ssh-env
+
+keybind = super+control+shift+alt+arrow_down=resize_split:down,100
+keybind = super+control+shift+alt+arrow_up=resize_split:up,100
+keybind = super+control+shift+alt+arrow_left=resize_split:left,100
+keybind = super+control+shift+alt+arrow_right=resize_split:right,100
+
+keybind = ctrl+c=copy_to_clipboard
+keybind = ctrl+v=paste_from_clipboard
+
+keybind = ctrl+shift+c=text:\x03
+
+# Tab management
+keybind = ctrl+t=new_tab
+keybind = ctrl+a=previous_tab
+keybind = ctrl+s=next_tab
+keybind = ctrl+w=close_tab:this
+keybind = ctrl+shift+w=undo
+
+# Numeric tab switching (override default alt+N)
+keybind = alt+one=unbind
+keybind = alt+two=unbind
+keybind = alt+three=unbind
+keybind = alt+four=unbind
+keybind = alt+five=unbind
+keybind = alt+six=unbind
+keybind = alt+seven=unbind
+keybind = alt+eight=unbind
+keybind = alt+nine=unbind
+keybind = ctrl+one=goto_tab:1
+keybind = ctrl+two=goto_tab:2
+keybind = ctrl+three=goto_tab:3
+keybind = ctrl+four=goto_tab:4
+keybind = ctrl+five=goto_tab:5
+keybind = ctrl+six=goto_tab:6
+keybind = ctrl+seven=goto_tab:7
+keybind = ctrl+eight=goto_tab:8
+keybind = ctrl+nine=goto_tab:9
+#
+# Slowdown mouse scrolling
+mouse-scroll-multiplier = 0.95
+
+shell-integration-features = no-cursor,ssh-env
+shell-integration = detect

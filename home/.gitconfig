@@ -1,0 +1,62 @@
+[alias]
+	ln = "!f() { git clone $1; }; f"
+	c = "!f() { category=\"$1\";  commit_message=\"$2\"; git add . && git commit -m \"$category: $commit_message\"; }; f"
+	cu = "!f() { git add . && git commit -m \"$1\" -n; }; f"
+	pu = "!f() { branch=\"$(git symbolic-ref --short HEAD)\"; git push origin $branch; }; f"
+	a = add
+	p = "!f() { category=\"$1\"; commit_message=\"$2\"; branch=\"$(git symbolic-ref --short HEAD)\"; git add . && git commit -m \"$category: $commit_message\" && git push origin $branch; }; f"
+
+	pd = "!f() { branch=\"$(git symbolic-ref --short HEAD)\"; git add . && git commit -m \"$1\" && git push origin $branch; }; f"
+	di = diff
+	pl = pull
+	f = fetch
+	
+
+	reb = "!f() { branch=${1:-master}; git rebase $branch; }; f"
+	rebnpm = "!f() { npm i && git add . && git rebase --continue; }; f"
+	rebc = "!f() { git add . && git rebase --continue; }; f"
+	reba = "!f() { git add . && git rebase --abort; }; f"
+
+	mr = "!f() { branch=${1:-master}; git merge $branch; }; f"
+	mrnpm = "!f() { npm i && git add . && git merge --continue; }; f"
+	merc = "!f() { git add . && git merge --continue; }; f"
+	mera = "!f() { git add . && git merge --abort; }; f"
+
+    backup = "!f() { branch_name=\"$(git symbolic-ref --short HEAD)\"; new_branch_name=\"${1:-$branch_name}_backup\"; git checkout -b $new_branch_name && git checkout $branch_name; }; f"
+	res = "!f() { git stash && git stash drop stash@{0};  }; f"
+
+
+
+	bs = checkout
+	bc = checkout -b
+	bd = branch -d
+	bl = branch
+
+	rem = remote add origin 
+	remv = remote remove origin
+	l = log --oneline
+	dwn = reset --soft HEAD~1
+	hd = rm --cached -r -f
+	hdall = "!f() { git rm --cached -r -f . && git add .; }; f"
+
+	st = stash
+	stl = stash list
+	stp = stash pop
+	sta = stash apply
+	stf =  "!f() { git stash push -m \"Stashing $1\" -- \"$1\"; }; f"
+
+	rh = reset --hard
+	rs = reset --soft
+
+	remove-remote = "!f() { branch=\"$(git symbolic-ref --short HEAD)\"; git reset --hard $1 && git push origin $branch --force}; f"
+	move = "!f() { git stash && git checkout -b $1 &&  git stash pop; };s f"
+	bempty = git switch --orphan
+	bemptypush = "!f() { git switch --orphan $1 && git commit --allow-empty -m "Initial commit" && git push -u origin $1}; f"
+
+	rfg = reflog
+
+	cpk = cherry-pick
+	cpkf = cherry-pick --strategy-option theirs
+
+	chlatest = "!f() { branch=\"$(git symbolic-ref --short HEAD)\"; git --ammend --no-edit && git push origin $branch --force f"
+

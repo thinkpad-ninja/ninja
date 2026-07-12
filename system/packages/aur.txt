@@ -1,0 +1,17 @@
+balena-etcher
+brave-bin
+clion
+clion-cmake
+clion-gdb
+clion-jre
+clion-lldb
+espanso-wayland
+hiddify-app-bin
+neofetch
+pycharm
+python-torrequest
+rustrover
+sherlock-git
+telegram-desktop-bin
+webstorm
+webstorm-jre

@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd ~/conf
+
+LATEST=$(git tag -l 'v*' | sort -V | tail -n1)
+LATEST=${LATEST:-v0.0.0}
+VERSION="v$(echo "$LATEST" | sed 's/v//' | awk -F. '{printf "%d.%d.%d", $1, $2, $3+1}')"
+
+# Mirror a source tree into ~/conf, but never silently destroy work: if the
+# mirror contains files that exist ONLY there (created directly in ~/conf, never
+# in the real source, and not yet committed), abort instead of deleting them.
+# Tracked files removed from the source still propagate as normal deletions.
+# Override the guard with FORCE=1.
+guarded_sync() {
+  local src="$1" dest="$2"
+  local destrel="${dest#"$HOME"/conf/}"
+  if [[ -e "$dest" ]]; then
+    local lost="" f sub
+    while IFS= read -r f; do
+      [[ -z "$f" ]] && continue
+      sub="${f#"$destrel"/}"
+      [[ -e "$src/$sub" ]] || lost+="  $f"$'\n'
+    done < <(git -C "$HOME/conf" ls-files --others --exclude-standard -- "$destrel")
+    if [[ -n "$lost" && "${FORCE:-0}" != "1" ]]; then
+      echo "commit: refusing to delete files that live only in the mirror ($dest)" >&2
+      echo "and not in its source ($src):" >&2
+      printf '%s' "$lost" >&2
+      echo "Move them into $src (the real source), or rm them, then re-run." >&2
+      echo "To override and delete anyway: FORCE=1 commit" >&2
+      exit 1
+    fi
+  fi
+  rm -rf "$dest"
+  cp -r "$src" "$dest"
+}
+
+rm -rf ~/conf/config/mako
+rm -rf ~/conf/config/jetbrains
+rm -rf ~/conf/assets/media
+rm -rf ~/conf/bin
+rm -rf ~/conf/config/zed
+
+rm -rf ~/conf/home/.bashrc
+
+mkdir -p config/mako
+mkdir -p config/jetbrains
+mkdir -p assets/media
+mkdir -p bin
+mkdir -p config/zed
+mkdir -p config/minecraft
+mkdir -p home
+
+guarded_sync ~/.local/share/omarchy/default/hypr ~/conf/config/hypr/default
+guarded_sync ~/.config/hypr ~/conf/config/hypr/config
+guarded_sync ~/.config/waybar ~/conf/config/waybar
+cp ~/.config/omarchy/current/theme/mako.ini ~/conf/config/mako/mako.ini
+guarded_sync ~/.config/ghostty ~/conf/config/ghostty
+guarded_sync ~/.config/aether ~/conf/config/aether
+guarded_sync ~/.config/espanso ~/conf/config/espanso
+cp -r ~/.config/JetBrains/CLion2025.3/settings.zip ~/conf/config/jetbrains/settings.zip
+cp -r ~/v/commit ~/conf/assets/media/commit
+guarded_sync ~/s ~/conf/scripts
+cp ~/.local/share/omarchy/bin/omarchy-battery-monitor ~/conf/bin/omarchy-battery-monitor
+cp ~/.local/share/omarchy/bin/omarchy-cmd-screenshot ~/conf/bin/omarchy-cmd-screenshot
+
+cp ~/.config/zed/settings.json ~/conf/config/zed/settings.json
+cp ~/.config/zed/keymap.json ~/conf/config/zed/keymap.json
+cp -r ~/.config/zed/themes ~/conf/config/zed/themes
+
+cp ~/.minecraft/options.txt ~/conf/config/minecraft/options.txt
+
+cp ~/.bashrc ~/conf/home/.bashrc
+
+find ~/conf -mindepth 2 -name .git -exec rm -rf {} +
+
+git add .
+git commit -m "$VERSION"
+git tag $VERSION
+git push origin master
+
+

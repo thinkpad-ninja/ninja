@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SESSION_DIR="$HOME/.config/sublime-text/Local"
+
+pkill -x sublime_text 2>/dev/null || true
+
+for _ in 1 2 3 4 5; do
+    pgrep -x sublime_text >/dev/null || break
+    sleep 0.3
+done
+pkill -9 -x sublime_text 2>/dev/null || true
+
+rm -f "$SESSION_DIR/Session.sublime_session" \
+      "$SESSION_DIR/Auto Save Session.sublime_session"
+
+nohup /opt/sublime_text/sublime_text --detached >/dev/null 2>&1 &
+disown

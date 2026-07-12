@@ -1,0 +1,14 @@
+[Unit]
+Description=AmneziaVPN tunnel watchdog (auto-heal after suspend/resume)
+Documentation=file:///usr/local/lib/amnezia-watchdog/README.md
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -u /usr/local/lib/amnezia-watchdog/amnezia_watchdog.py
+Restart=always
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

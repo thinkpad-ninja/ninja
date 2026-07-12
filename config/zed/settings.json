@@ -1,0 +1,13 @@
+{
+  "icon_theme": "Zed (Default)",
+  "cli_default_open_behavior": "new_window",
+  "vim_mode": true,
+  "theme": {
+    "mode": "dark",
+    "light": "One Light",
+    "dark": "VS Code Dark Modern"
+  },
+  "project_panel": {
+    "dock": "left"
+  }
+}

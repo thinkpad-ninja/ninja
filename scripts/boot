@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Recolor the Limine boot menu to a PURE monochrome theme:
+# full black background, only white text. No green title, no green help line,
+# no tinted ANSI palette. Idempotent + reappliable.
+#
+# It rewrites ONLY the theme directives in the config header and never touches
+# the auto-generated OS / EFI / snapshot entries (limine-entry-tool &
+# limine-snapper-sync own those). Safe to re-run after kernel/snapshot updates.
+#
+# Run with:  sudo bash ~/conf/scripts/black-limine
+set -euo pipefail
+
+if [[ $EUID -ne 0 ]]; then
+  echo "Run me with sudo:  sudo bash $0" >&2
+  exit 1
+fi
+
+# Live config on the EFI System Partition (this is what actually boots).
+ESP_CONF="$(bootctl --print-esp-path 2>/dev/null || echo /boot)/limine.conf"
+# Dotfile source of truth in ~/conf so the theme survives / can be re-synced.
+SRC_CONF="${HOME_CONF:-/home/x/conf}/limine/limine.conf"
+
+patch_header() {
+  # $1 = path to a limine.conf. Rewrites theme keys in the header only.
+  local conf="$1"
+  [[ -f "$conf" ]] || { echo "  (skip, not found: $conf)"; return 0; }
+  cp -f "$conf" "${conf}.bak-black-$(date +%Y%m%d-%H%M%S)"
+  python3 - "$conf" <<'PY'
+import sys
+conf = sys.argv[1]
+mono = "000000;ffffff;ffffff;ffffff;ffffff;ffffff;ffffff;ffffff"
+# key -> replacement value (all lowercase keys; both US/UK spellings handled)
+repl = {
+    "interface_branding_color":        "ffffff",
+    "interface_branding_colour":       "ffffff",
+    "interface_help_color":            "ffffff",
+    "interface_help_colour":           "ffffff",
+    "interface_help_color_bright":     "ffffff",
+    "interface_help_colour_bright":    "ffffff",
+    "term_background":                 "000000",
+    "backdrop":                        "000000",
+    "term_background_bright":          "000000",
+    "term_foreground":                 "ffffff",
+    "term_foreground_bright":          "ffffff",
+    "term_palette":                    mono,
+    "term_palette_bright":             mono,
+}
+lines = open(conf).read().splitlines(keepends=True)
+out, in_header, seen = [], True, set()
+branding_at = None
+for line in lines:
+    s = line.lstrip()
+    # entries start with a single leading '/' (/+Omarchy, /EFI, //linux is nested)
+    if in_header and s.startswith("/"):
+        in_header = False
+    if in_header and s.startswith("#") and "tokyo night" in s.lower():
+        out.append("# Monochrome palette: pure black background, white-only text\n")
+        continue
+    if in_header and ":" in s and not s.startswith("#"):
+        key = s.split(":", 1)[0].strip().lower()
+        if key in repl:
+            out.append(f"{key}: {repl[key]}\n")
+            seen.add(key)
+            if key.startswith("interface_branding_colo"):
+                branding_at = len(out)
+            continue
+    out.append(line)
+# Ensure the (green-by-default) help line is explicitly forced white.
+if "interface_help_colour" not in seen and "interface_help_color" not in seen:
+    at = branding_at if branding_at is not None else 0
+    out.insert(at, "interface_help_colour: ffffff\n")
+    out.insert(at + 1, "interface_help_colour_bright: ffffff\n")
+open(conf, "w").writelines(out)
+# Print resulting header for confirmation.
+for line in out:
+    if line.lstrip().startswith("/"):
+        break
+    sys.stdout.write("    " + line)
+PY
+}
+
+echo "==> Patching dotfile source: $SRC_CONF"
+patch_header "$SRC_CONF"
+echo "==> Patching live ESP config: $ESP_CONF"
+patch_header "$ESP_CONF"
+
+echo
+echo "Done. Full-black background, white-only text. Reboot to see it."
+echo "Backups written next to each file as *.bak-black-<timestamp>."

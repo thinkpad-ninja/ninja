@@ -1,0 +1,63 @@
+/* Aether Theme Overrides
+ * Edit this file to customize your Aether theme
+ * Changes are applied automatically on save (live reload)
+ * 
+ * Override GTK named colors directly to theme the entire application.
+ * These colors are used throughout the GTK/Libadwaita interface.
+ * 
+ * AVAILABLE GTK NAMED COLORS:
+ * 
+ * ACCENT COLORS (interactive elements, suggested buttons):
+ *   @define-color accent_bg_color #color;      Main accent color
+ *   @define-color accent_fg_color #color;      Accent foreground/text
+ *   @define-color accent_color #color;         Accent color variant
+ * 
+ * WINDOW/VIEW COLORS:
+ *   @define-color window_bg_color #color;      Main window background
+ *   @define-color window_fg_color #color;      Main window foreground/text
+ *   @define-color view_bg_color #color;        Content area background
+ *   @define-color view_fg_color #color;        Content area text
+ * 
+ * UI ELEMENT COLORS:
+ *   @define-color headerbar_bg_color #color;   Header bar background
+ *   @define-color headerbar_fg_color #color;   Header bar text
+ *   @define-color card_bg_color #color;        Card/panel background
+ *   @define-color card_fg_color #color;        Card/panel text
+ *   @define-color borders #color;              Border colors
+ * 
+ * ACTION COLORS:
+ *   @define-color destructive_bg_color #color; Delete/remove button background
+ *   @define-color destructive_fg_color #color; Delete/remove button text
+ *   @define-color success_bg_color #color;     Success state background
+ *   @define-color success_fg_color #color;     Success state text
+ *   @define-color warning_bg_color #color;     Warning state background
+ *   @define-color warning_fg_color #color;     Warning state text
+ *   @define-color error_bg_color #color;       Error state background
+ *   @define-color error_fg_color #color;       Error state text
+ * 
+ * EXAMPLE - Tokyo Night Theme:
+ * 
+ * @define-color accent_bg_color #7aa2f7;
+ * @define-color accent_fg_color #1a1b26;
+ * @define-color accent_color #7aa2f7;
+ * 
+ * @define-color window_bg_color #1a1b26;
+ * @define-color window_fg_color #c0caf5;
+ * @define-color view_bg_color #16161e;
+ * @define-color view_fg_color #c0caf5;
+ * 
+ * @define-color headerbar_bg_color #1a1b26;
+ * @define-color headerbar_fg_color #c0caf5;
+ * @define-color card_bg_color #24283b;
+ * @define-color card_fg_color #c0caf5;
+ * 
+ * @define-color destructive_bg_color #f7768e;
+ * @define-color destructive_fg_color #1a1b26;
+ * 
+ * @define-color borders rgba(255, 255, 255, 0.1);
+ * 
+ * See examples/ directory for more theme examples.
+ * See THEMING.md for detailed documentation.
+ */
+
+/* Add your color overrides here */

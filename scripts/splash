@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# Updates the "black" plymouth theme: pure-black background, NO logo/title/
+# progress bar, but KEEPS a minimal LUKS password dialog (input box + dots
+# only, NO lock icon, NO messages) so you can see what you type at boot.
+# Run with: sudo bash /home/x/black-plymouth-prompt.sh
+set -euo pipefail
+
+THEME_DIR=/usr/share/plymouth/themes/black
+SRC=/usr/share/plymouth/themes/omarchy
+
+if [[ $EUID -ne 0 ]]; then
+  echo "Run me with sudo:  sudo bash $0" >&2
+  exit 1
+fi
+
+mkdir -p "$THEME_DIR"
+
+echo "==> Copying password-dialog assets (box, dot) — no lock icon"
+cp -f "$SRC/entry.png" "$SRC/bullet.png" "$THEME_DIR/"
+
+echo "==> Writing theme descriptor"
+cat > "$THEME_DIR/black.plymouth" <<'EOF'
+[Plymouth Theme]
+Name=Black
+Description=Pure black splash, password prompt only, no logo
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/black
+ScriptFile=/usr/share/plymouth/themes/black/black.script
+EOF
+
+echo "==> Writing black.script (black bg + password prompt, no title)"
+cat > "$THEME_DIR/black.script" <<'EOF'
+# Pure black background, no logo / no title / no progress bar.
+# Keeps a minimal password dialog for LUKS disk unlock.
+Window.SetBackgroundTopColor(0, 0, 0);
+Window.SetBackgroundBottomColor(0, 0, 0);
+
+global.password_shown = 0;
+
+#----- assets -----
+entry.image  = Image("entry.png");
+bullet.image = Image("bullet.png");
+
+# Password entry box, centered on screen (no lock icon)
+entry.sprite = Sprite(entry.image);
+entry.x = Window.GetWidth()/2  - entry.image.GetWidth()/2;
+entry.y = Window.GetHeight()/2 - entry.image.GetHeight()/2;
+entry.sprite.SetPosition(entry.x, entry.y, 10001);
+entry.sprite.SetOpacity(0);
+
+bullet.sprites = [];
+
+fun show_password_dialog()
+  {
+    entry.sprite.SetOpacity(1);
+  }
+
+fun hide_password_dialog()
+  {
+    entry.sprite.SetOpacity(0);
+    for (index = 0; bullet.sprites[index]; index++)
+      bullet.sprites[index].SetOpacity(0);
+  }
+
+fun display_normal_callback ()
+  {
+    hide_password_dialog();
+  }
+
+fun display_password_callback (prompt, bullets)
+  {
+    global.password_shown = 1;
+    show_password_dialog();
+
+    # Clear existing bullets
+    for (index = 0; bullet.sprites[index]; index++)
+      bullet.sprites[index].SetOpacity(0);
+
+    max_bullets = 21;
+    bullets_to_show = bullets;
+    if (bullets_to_show > max_bullets)
+      bullets_to_show = max_bullets;
+
+    for (index = 0; index < bullets_to_show; index++)
+      {
+        if (!bullet.sprites[index])
+          {
+            scaled_bullet = bullet.image.Scale(7, 7);
+            bullet.sprites[index] = Sprite(scaled_bullet);
+            bullet.x = entry.x + 20 + index * (7 + 5);
+            bullet.y = entry.y + entry.image.GetHeight()/2 - 3.5;
+            bullet.sprites[index].SetPosition(bullet.x, bullet.y, 10002);
+          }
+        bullet.sprites[index].SetOpacity(1);
+      }
+  }
+
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+EOF
+
+echo "==> Applying theme + rebuilding boot image"
+plymouth-set-default-theme -R black
+
+echo
+echo "DONE. Boot/shutdown is pure black; the disk-unlock screen shows only a"
+echo "password box + dots (no green omarchy title). Reboot to see it."
+echo "Revert to stock: sudo plymouth-set-default-theme -R omarchy"

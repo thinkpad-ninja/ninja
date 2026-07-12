@@ -1,0 +1,13 @@
+[Unit]
+Description=Hard thermal guard for fuzzers (pause/resume on hottest CPU core temp)
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/home/x/.local/bin/fuzz-thermal-guard.sh
+Restart=always
+RestartSec=5
+Environment=HOT_C=92 COOL_C=85 POLL_S=0.3
+
+[Install]
+WantedBy=default.target

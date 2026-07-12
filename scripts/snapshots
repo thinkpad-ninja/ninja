@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $EUID -ne 0 ]]; then
+  exec sudo -E "$0" "$@"
+fi
+
+for cfg in /etc/snapper/configs/root /etc/snapper/configs/home; do
+  sed -i \
+    -e 's/^TIMELINE_CREATE=.*/TIMELINE_CREATE="yes"/' \
+    -e 's/^TIMELINE_LIMIT_HOURLY=.*/TIMELINE_LIMIT_HOURLY="0"/' \
+    -e 's/^TIMELINE_LIMIT_DAILY=.*/TIMELINE_LIMIT_DAILY="4"/' \
+    -e 's/^TIMELINE_LIMIT_WEEKLY=.*/TIMELINE_LIMIT_WEEKLY="0"/' \
+    -e 's/^TIMELINE_LIMIT_MONTHLY=.*/TIMELINE_LIMIT_MONTHLY="0"/' \
+    -e 's/^TIMELINE_LIMIT_QUARTERLY=.*/TIMELINE_LIMIT_QUARTERLY="0"/' \
+    -e 's/^TIMELINE_LIMIT_YEARLY=.*/TIMELINE_LIMIT_YEARLY="0"/' \
+    "$cfg"
+done
+
+mkdir -p /etc/systemd/system/snapper-timeline.timer.d
+cat > /etc/systemd/system/snapper-timeline.timer.d/override.conf <<'EOF'
+[Timer]
+OnCalendar=
+OnCalendar=daily
+EOF
+
+systemctl daemon-reload
+systemctl enable --now snapper-timeline.timer snapper-cleanup.timer
+
+echo "--- override.conf ---"
+cat /etc/systemd/system/snapper-timeline.timer.d/override.conf
+echo "--- timers ---"
+systemctl list-timers --no-pager | grep snapper

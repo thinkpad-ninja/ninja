@@ -1,0 +1,12 @@
+[package]
+name = "project-radar"
+version = "0.1.0"
+edition = "2021"
+description = "Scan ~/try* dirs and map your coding obsessions: own vs clone, language, last-touched, GitHub stars."
+
+[[bin]]
+name = "radar"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 2

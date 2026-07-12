@@ -1,0 +1,60 @@
+// Translated from VSCode keybindings.json (best effort).
+// Key syntax converted (ctrl+x -> ctrl-x) and commands mapped to Zed actions.
+// Bindings with no Zed equivalent were skipped (see notes at bottom).
+[
+  // ---- Editor / global ----
+  {
+    "context": "Editor",
+    "bindings": {
+      "alt-u": "editor::FindAllReferences",     // was goToReferences
+      "alt-q": "editor::Hover",                  // was showHover
+      "alt-e": "editor::Hover",                  // was showDebugHover
+      "f6": "editor::Rename",                    // was rename
+      "ctrl-enter": "editor::GoToDefinition",    // was revealDefinition
+      "alt-enter": "editor::GoToDeclaration"     // was revealDeclaration
+    }
+  },
+
+  // ---- Workspace-wide (tabs, panels, finders) ----
+  {
+    "bindings": {
+      "ctrl-1": ["pane::ActivateItem", 0],       // openEditorAtIndex1
+      "ctrl-2": ["pane::ActivateItem", 1],
+      "ctrl-3": ["pane::ActivateItem", 2],
+      "ctrl-4": ["pane::ActivateItem", 3],
+      "ctrl-s": "pane::ActivateNextItem",        // was nextEditor  (NOTE: overrides Save!)
+      "ctrl-a": "pane::ActivatePreviousItem",        // was previousEditor (NOTE: overrides Select All!)
+      "ctrl-shift-e": "pane::CloseInactiveItems",// was closeOtherEditors
+      "alt-d": "terminal_panel::ToggleFocus",    // was toggleTerminal
+      "alt-g": "go_to_line::Toggle",             // was gotoLine
+      "ctrl-shift-n": "file_finder::Toggle",     // was quickOpen
+      "ctrl-shift-k": "theme_selector::Toggle",  // was selectTheme
+      "alt-f": "zed::OpenKeymap"                 // was openGlobalKeybindings
+    }
+  },
+
+  // ---- File tree (VSCode "explorer") ----
+  {
+    "context": "ProjectPanel",
+    "bindings": {
+      "ctrl-n": "project_panel::NewDirectory",   // was explorer.newFolder
+      "ctrl-b": "project_panel::NewFile",        // was explorer.newFile
+      "ctrl-r": "project_panel::Rename"          // was renameFile
+    }
+  }
+
+  // ---- NOT translated (no Zed equivalent) ----
+  // bookmarks.toggle / bookmarks view (alt-b, ctrl-alt-b)
+  // gitlens.* (backtick)
+  // notebook.cell.* (ctrl-v paste-above, 'a' insert-cell)
+  // debug showDebugHover / setVariable / renameWatchExpression
+  // agentSession.rename, remote.tunnel.label
+  // pinEditor / unpinEditor (alt-g/alt-h)
+  // editor.action.changeAll (f6 also -> rename, kept rename)
+  // terminal: split / killAll / focusNext-Prev / scrollPage / sendSequence /
+  //           new / kill  (ctrl-f, ctrl-x, ctrl-j/k, alt-j/k, shift-enter, f8...)
+  //   -> Zed's terminal + pane model differs; left at Zed defaults.
+  // ctrl-f overloads (explorer focus / collapse folders / terminal split)
+  //   -> kept Zed's ctrl-f = search.
+  // pane focus cycling (ctrl-' / ctrl-;) -> Zed uses directional pane nav.
+]
