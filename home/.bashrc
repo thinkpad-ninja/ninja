@@ -393,3 +393,9 @@ lown() {
     tdesktop-build:mz-patched \
     bash -lc 'cd /usr/src/tdesktop && nice -n 19 ionice -c3 cmake --build out --config Debug -j1'
 }
+
+# --- battery (upower) ---
+# Full battery report: charge, state, health, time to empty/full, voltage, cycles
+alias battery='upower -i $(upower -e | grep BAT)'
+# Quick summary: just the lines that matter
+batt() { upower -i "$(upower -e | grep BAT)" | grep -E 'state|percentage|capacity:|time to|energy-rate|charge-cycles'; }
