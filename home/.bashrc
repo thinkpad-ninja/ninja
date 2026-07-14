@@ -399,3 +399,9 @@ lown() {
 alias battery='upower -i $(upower -e | grep BAT)'
 # Quick summary: just the lines that matter
 batt() { upower -i "$(upower -e | grep BAT)" | grep -E 'state|percentage|capacity:|time to|energy-rate|charge-cycles'; }
+
+# --- github: create a private repo (usage: g@ <name>) ---
+alias 'g@'='gh repo create --private'
+
+# --- github: create a public repo (usage: @+ <name>) ---
+alias '@+'='gh repo create --public'
