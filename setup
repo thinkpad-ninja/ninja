@@ -6,7 +6,7 @@
 # every package + system service on top.
 #
 # Zero-setup usage on a brand new machine (repo not even cloned yet):
-#   curl -fsSL https://raw.githubusercontent.com/gearonixx/thinkpad-ninja/master/setup | bash
+#   curl -fsSL https://raw.githubusercontent.com/thinkpad-ninja/ninja/master/setup | bash
 # Or, with the repo already at ~/conf:
 #   ~/conf/setup
 #
@@ -16,8 +16,8 @@
 
 set -uo pipefail
 
-REPO_HTTPS="https://github.com/gearonixx/thinkpad-ninja.git"
-REPO_SSH="git@github.com:gearonixx/thinkpad-ninja.git"
+REPO_HTTPS="https://github.com/thinkpad-ninja/ninja.git"
+REPO_SSH="git@github.com:thinkpad-ninja/ninja.git"
 AYU_LIGHT_URL="https://github.com/fdidron/omarchy-ayu-light-theme"
 CONF="$HOME/conf"
 BACKUP="$HOME/.setup-backup-$(date +%Y%m%d-%H%M%S)"
