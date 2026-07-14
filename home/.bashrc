@@ -364,6 +364,7 @@ alias 3="cd ~/try3 && s"
 alias 4="cd ~/try4 && s"
 alias 5="cd ~/try5 && s"
 alias 6="cd ~/try6 && s"
+alias 7="cd ~/try7 && s"
 # --- snapper snapshots ---
 # List snapshots
 alias snaps='sudo snapper list'

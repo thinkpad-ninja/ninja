@@ -1,10 +1,14 @@
 {
-  "icon_theme": "Zed (Default)",
+  "icon_theme": {
+    "mode": "dark",
+    "light": "Zed (Default)",
+    "dark": "Zed (Default)"
+  },
   "cli_default_open_behavior": "new_window",
   "vim_mode": true,
   "theme": {
     "mode": "dark",
-    "light": "One Light",
+    "light": "Claude Warm Light",
     "dark": "VS Code Dark Modern"
   },
   "project_panel": {

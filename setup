@@ -1,0 +1,397 @@
+#!/usr/bin/env bash
+# setup — one-shot, zero-setup provisioner: raw Omarchy -> this machine's setup.
+#
+# Inverse of ./commit (which mirrors the live system INTO this repo): this
+# script mirrors the repo back ONTO a fresh Omarchy install and installs
+# every package + system service on top.
+#
+# Zero-setup usage on a brand new machine (repo not even cloned yet):
+#   curl -fsSL https://raw.githubusercontent.com/gearonixx/thinkpad-ninja/master/setup | bash
+# Or, with the repo already at ~/conf:
+#   ~/conf/setup
+#
+# Idempotent: safe to re-run. Anything it overwrites is first backed up to
+# ~/.setup-backup-<timestamp>/. Non-critical failures don't abort the run;
+# they're collected and printed at the end.
+
+set -uo pipefail
+
+REPO_HTTPS="https://github.com/gearonixx/thinkpad-ninja.git"
+REPO_SSH="git@github.com:gearonixx/thinkpad-ninja.git"
+AYU_LIGHT_URL="https://github.com/fdidron/omarchy-ayu-light-theme"
+CONF="$HOME/conf"
+BACKUP="$HOME/.setup-backup-$(date +%Y%m%d-%H%M%S)"
+FAILURES=()
+
+export OMARCHY_PATH="$HOME/.local/share/omarchy"
+export PATH="$OMARCHY_PATH/bin:$HOME/.local/bin:$PATH"
+
+THEME="roseofdune"          # live theme on the source machine
+WALLPAPER="BG2.jpg"         # pinned background within that theme
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+c_blue=$'\033[1;34m'; c_yel=$'\033[1;33m'; c_off=$'\033[0m'
+say()  { printf '%s==> %s%s\n' "$c_blue" "$*" "$c_off"; }
+warn() { printf '%s  ! %s%s\n' "$c_yel" "$*" "$c_off" >&2; }
+
+# Run a step; on failure record it and keep going.
+step() {
+  local name="$1"; shift
+  say "$name"
+  if "$@"; then return 0; fi
+  warn "FAILED: $name"
+  FAILURES+=("$name")
+  return 0
+}
+
+# Back up a path (file/dir/symlink) into $BACKUP, mirroring its layout.
+backup() {
+  local t="$1"
+  [ -e "$t" ] || [ -L "$t" ] || return 0
+  mkdir -p "$BACKUP/$(dirname "${t#"$HOME"/}")"
+  cp -a "$t" "$BACKUP/${t#"$HOME"/}" 2>/dev/null || true
+}
+
+# deploy_dir SRC DST — mirror a repo dir onto the system (deletes strays,
+# so DST becomes exactly what the repo says, like commit's guarded_sync
+# in reverse). Extra args are passed to rsync (e.g. --exclude).
+deploy_dir() {
+  local src="$1" dst="$2"; shift 2
+  [ -d "$src" ] || { warn "missing in repo: $src"; return 1; }
+  backup "$dst"
+  mkdir -p "$dst"
+  rsync -a --delete --exclude '.git' "$@" "$src/" "$dst/"
+}
+
+deploy_file() {
+  local src="$1" dst="$2"
+  [ -f "$src" ] || { warn "missing in repo: $src"; return 1; }
+  backup "$dst"
+  mkdir -p "$(dirname "$dst")"
+  cp -f "$src" "$dst"
+}
+
+# ---------------------------------------------------------------------------
+# 0. guards + sudo keepalive
+# ---------------------------------------------------------------------------
+[ "$(id -u)" -eq 0 ] && { echo "Run as your user, not root." >&2; exit 1; }
+command -v pacman >/dev/null || { echo "Not an Arch/Omarchy system." >&2; exit 1; }
+
+say "Requesting sudo (kept alive for the whole run)"
+sudo -v || exit 1
+( while true; do sleep 50; sudo -n true 2>/dev/null || exit; done ) &
+SUDO_PID=$!
+trap 'kill "$SUDO_PID" 2>/dev/null' EXIT
+
+# ---------------------------------------------------------------------------
+# 1. bootstrap: base tools + this repo itself
+# ---------------------------------------------------------------------------
+step "Bootstrap tools (git, rsync, base-devel)" \
+  sudo pacman -S --needed --noconfirm git rsync base-devel
+
+if [ ! -d "$CONF/.git" ]; then
+  say "Cloning dotfiles repo to $CONF"
+  git clone "$REPO_SSH" "$CONF" 2>/dev/null || git clone "$REPO_HTTPS" "$CONF" \
+    || { echo "Could not clone $REPO_HTTPS" >&2; exit 1; }
+fi
+cd "$CONF"
+
+# ---------------------------------------------------------------------------
+# 2. packages — full sync, then everything in system/packages/
+#    pacman.txt entries that turn out to be repo-unavailable (and all of
+#    aur.txt) go through yay instead.
+# ---------------------------------------------------------------------------
+step "Full system upgrade (pacman -Syu)" sudo pacman -Syu --noconfirm
+
+install_packages() {
+  local avail wanted repo_pkgs=() aur_pkgs=() p
+  avail="$(pacman -Slq | sort -u)" || return 1
+  wanted="$(grep -vE '^\s*(#|$)' system/packages/pacman.txt | sort -u)"
+  while IFS= read -r p; do
+    if grep -qxF "$p" <<<"$avail"; then repo_pkgs+=("$p"); else aur_pkgs+=("$p"); fi
+  done <<<"$wanted"
+  while IFS= read -r p; do aur_pkgs+=("$p"); done \
+    < <(grep -vE '^\s*(#|$)' system/packages/aur.txt)
+
+  say "Installing ${#repo_pkgs[@]} repo packages"
+  sudo pacman -S --needed --noconfirm "${repo_pkgs[@]}" || return 1
+
+  if ! command -v yay >/dev/null; then
+    say "Building yay from AUR"
+    local t; t="$(mktemp -d)"
+    git clone https://aur.archlinux.org/yay-bin.git "$t" \
+      && (cd "$t" && makepkg -si --noconfirm) || return 1
+  fi
+  say "Installing ${#aur_pkgs[@]} AUR packages (failures collected per-package)"
+  local failed=()
+  for p in "${aur_pkgs[@]}"; do
+    yay -S --needed --noconfirm "$p" || failed+=("$p")
+  done
+  if [ "${#failed[@]}" -gt 0 ]; then
+    warn "AUR packages that failed: ${failed[*]}"
+    FAILURES+=("aur: ${failed[*]}")
+  fi
+}
+step "Install all packages from system/packages/" install_packages
+
+# ---------------------------------------------------------------------------
+# 3. home directory layout (from home/user-dirs.dirs) + home dotfiles
+# ---------------------------------------------------------------------------
+make_dirs() {
+  mkdir -p "$HOME/dl" "$HOME/doc" "$HOME/ss" "$HOME/rec" \
+           "$HOME/s" "$HOME/v" "$HOME/.config/nnn" "$HOME/.local/bin"
+}
+step "Create home layout (~/dl ~/doc ~/ss ~/rec ~/s ~/v)" make_dirs
+
+step "Deploy ~/.bashrc"                 deploy_file home/.bashrc        "$HOME/.bashrc"
+step "Deploy ~/.gitconfig"              deploy_file home/.gitconfig     "$HOME/.gitconfig"
+step "Deploy user-dirs.dirs"            deploy_file home/user-dirs.dirs "$HOME/.config/user-dirs.dirs"
+
+# ---------------------------------------------------------------------------
+# 4. omarchy themes — install ALL of them, then fully apply the live one.
+#    Must run BEFORE app configs: omarchy-theme-set rewrites VS Code
+#    settings, and the repo's exact snapshots get deployed on top after.
+# ---------------------------------------------------------------------------
+deploy_themes() {
+  local t name
+  for t in themes/*/; do
+    name="$(basename "$t")"
+    deploy_dir "$t" "$HOME/.config/omarchy/themes/$name" || return 1
+  done
+  # ayu-light came from a third-party repo, not from ours
+  if [ ! -d "$HOME/.config/omarchy/themes/ayu-light" ]; then
+    git clone "$AYU_LIGHT_URL" "$HOME/.config/omarchy/themes/ayu-light" || return 1
+  fi
+  if [ -d assets/backgrounds ]; then
+    mkdir -p "$HOME/.config/omarchy/backgrounds"
+    rsync -a assets/backgrounds/ "$HOME/.config/omarchy/backgrounds/"
+  fi
+}
+step "Install omarchy themes (felix, boring, roseofdune, ayu-light)" deploy_themes
+
+# omarchy-theme-set does the real work (copies theme -> current/theme,
+# generates configs from colors.toml templates, restyles running apps).
+# Session-only parts (gsettings, chromium, waybar restarts) fail soft when
+# run from a TTY — the first-login finisher below re-runs it in a session.
+apply_theme() {
+  omarchy-theme-set "$THEME" || true
+  [ "$(cat "$HOME/.config/omarchy/current/theme.name" 2>/dev/null)" = "$THEME" ] || return 1
+  local bg="$HOME/.config/omarchy/current/theme/backgrounds/$WALLPAPER"
+  if [ -e "$bg" ]; then
+    ln -nsf "$bg" "$HOME/.config/omarchy/current/background"
+    pkill -x swaybg 2>/dev/null || true
+    command -v uwsm-app >/dev/null \
+      && setsid uwsm-app -- swaybg -i "$HOME/.config/omarchy/current/background" -m fill >/dev/null 2>&1 &
+  fi
+  # commit snapshots the live theme's mako.ini — restore it on top
+  deploy_file config/mako/mako.ini "$HOME/.config/omarchy/current/theme/mako.ini"
+}
+step "Apply theme: $THEME + $WALLPAPER wallpaper" apply_theme
+
+# First-login finisher: re-applies the theme inside a real session (so
+# gsettings/chromium/vscode theming land), then disables itself.
+install_finisher() {
+  cat > "$HOME/.local/bin/omarchy-setup-finish" <<EOF
+#!/usr/bin/env bash
+export OMARCHY_PATH="\$HOME/.local/share/omarchy"
+export PATH="\$OMARCHY_PATH/bin:\$PATH"
+omarchy-theme-set "$THEME" || true
+bg="\$HOME/.config/omarchy/current/theme/backgrounds/$WALLPAPER"
+[ -e "\$bg" ] && ln -nsf "\$bg" "\$HOME/.config/omarchy/current/background"
+pkill -x swaybg 2>/dev/null
+command -v uwsm-app >/dev/null && setsid uwsm-app -- swaybg -i "\$HOME/.config/omarchy/current/background" -m fill >/dev/null 2>&1 &
+systemctl --user disable omarchy-setup-finish.service 2>/dev/null
+exit 0
+EOF
+  chmod +x "$HOME/.local/bin/omarchy-setup-finish"
+  mkdir -p "$HOME/.config/systemd/user"
+  cat > "$HOME/.config/systemd/user/omarchy-setup-finish.service" <<'EOF'
+[Unit]
+Description=One-time theme finisher after fresh setup
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/omarchy-setup-finish
+
+[Install]
+WantedBy=graphical-session.target
+EOF
+  systemctl --user daemon-reload
+  systemctl --user enable omarchy-setup-finish.service
+}
+step "Install first-login theme finisher (self-disabling)" install_finisher
+
+# ---------------------------------------------------------------------------
+# 5. app configs (inverse of ./commit)
+# ---------------------------------------------------------------------------
+step "Deploy hyprland config (~/.config/hypr)" \
+  deploy_dir config/hypr/config "$HOME/.config/hypr"
+step "Deploy omarchy hypr defaults (~/.local/share/omarchy/default/hypr)" \
+  deploy_dir config/hypr/default "$HOME/.local/share/omarchy/default/hypr"
+step "Deploy waybar"   deploy_dir config/waybar  "$HOME/.config/waybar"
+step "Deploy ghostty"  deploy_dir config/ghostty "$HOME/.config/ghostty"
+step "Deploy aether"   deploy_dir config/aether  "$HOME/.config/aether"
+
+deploy_espanso() {
+  deploy_dir config/espanso "$HOME/.config/espanso" || return 1
+  # match/*.yml holds personal snippets (name/phone/address) — gitignored in
+  # this public repo on purpose, so a fresh clone can't restore them.
+  if ! ls config/espanso/match/*.yml >/dev/null 2>&1; then
+    warn "espanso match snippets are NOT in the repo (PII, public repo)."
+    warn "Copy ~/.config/espanso/match/*.yml over from the old machine manually."
+  fi
+}
+step "Deploy espanso" deploy_espanso
+
+deploy_zed() {
+  deploy_file config/zed/settings.json "$HOME/.config/zed/settings.json" || return 1
+  deploy_file config/zed/keymap.json   "$HOME/.config/zed/keymap.json"   || return 1
+  [ -d config/zed/themes ] && deploy_dir config/zed/themes "$HOME/.config/zed/themes"
+  return 0
+}
+step "Deploy zed settings" deploy_zed
+
+deploy_vscode() {
+  deploy_file config/vscode/settings.json    "$HOME/.config/Code/User/settings.json"    || return 1
+  deploy_file config/vscode/keybindings.json "$HOME/.config/Code/User/keybindings.json" || return 1
+}
+step "Deploy vscode settings" deploy_vscode
+
+install_vscode_extensions() {
+  command -v code >/dev/null || { warn "code not on PATH, skipping extensions"; return 1; }
+  local failed=() e
+  while IFS= read -r e; do
+    [ -z "$e" ] && continue
+    code --install-extension "$e" --force >/dev/null 2>&1 || failed+=("$e")
+  done < config/vscode/extensions.txt
+  [ "${#failed[@]}" -gt 0 ] && warn "vscode extensions that failed: ${failed[*]}"
+  return 0
+}
+step "Install vscode extensions (takes a while)" install_vscode_extensions
+
+step "Deploy claude settings" deploy_file config/claude/settings.json "$HOME/.claude/settings.json"
+
+deploy_minecraft() { deploy_file config/minecraft/options.txt "$HOME/.minecraft/options.txt"; }
+step "Deploy minecraft options" deploy_minecraft
+
+deploy_firefox() {
+  local ffdir="$HOME/.mozilla/firefox" found=0 d
+  if [ ! -d "$ffdir" ] && command -v firefox >/dev/null; then
+    firefox -CreateProfile default >/dev/null 2>&1 || true
+  fi
+  for d in "$ffdir"/*.default*/ "$ffdir"/*.dev-edition*/; do
+    [ -d "$d" ] || continue
+    cp -f config/firefox/user.js "$d/user.js" && found=1
+  done
+  [ "$found" -eq 1 ] || { warn "no firefox profile found — launch firefox once, then re-run"; return 1; }
+}
+step "Deploy firefox user.js into profiles" deploy_firefox
+
+# JetBrains settings.zip is imported through the IDE, not the filesystem.
+if [ -f config/jetbrains/settings.zip ]; then
+  warn "JetBrains: import config/jetbrains/settings.zip via File > Manage IDE Settings > Import"
+fi
+
+# ---------------------------------------------------------------------------
+# 6. scripts, bin overrides, personal tools, media
+# ---------------------------------------------------------------------------
+step "Deploy ~/s scripts" deploy_dir scripts "$HOME/s"
+
+deploy_omarchy_bin() {
+  local f
+  for f in bin/*; do
+    deploy_file "$f" "$OMARCHY_PATH/bin/$(basename "$f")" || return 1
+    chmod +x "$OMARCHY_PATH/bin/$(basename "$f")"
+  done
+}
+step "Deploy omarchy bin overrides (battery monitor, screenshot)" deploy_omarchy_bin
+
+# bashrc's repos() expects the radar tool at ~/project-radar (built lazily by
+# the alias itself, so no cargo build needed here).
+step "Deploy radar to ~/project-radar" \
+  deploy_dir tools/radar "$HOME/project-radar" --exclude 'target'
+
+deploy_media() {
+  [ -d assets/media/commit ] || return 0
+  mkdir -p "$HOME/v"
+  rsync -a assets/media/commit/ "$HOME/v/commit/"
+}
+step "Restore ~/v/commit media" deploy_media
+warn "~/v study/ambient media is rebuilt separately: tools/init-v/recreate-v.sh (fill TODO_URLs first)"
+
+# ---------------------------------------------------------------------------
+# 7. system: boot theme, splash, snapper, vpn watchdog, fuzz guard, services
+# ---------------------------------------------------------------------------
+# NOTE: system/limine/limine.conf is a snapshot of THIS machine (UUIDs and
+# all) — never copied onto a fresh install. Instead: scripts/boot recolors
+# the live ESP config, and the portable header keys are ported below.
+step "Limine: monochrome boot menu (scripts/boot)" sudo bash scripts/boot
+
+port_limine_header() {
+  local esp k v
+  esp="$(bootctl --print-esp-path 2>/dev/null || echo /boot)/limine.conf"
+  [ -f "$esp" ] || return 1
+  for k in default_entry hash_mismatch_panic; do
+    v="$(grep -m1 "^$k:" system/limine/limine.conf | cut -d: -f2- | xargs)" || true
+    [ -n "${v:-}" ] || continue
+    if sudo grep -q "^$k:" "$esp"; then
+      sudo sed -i "s|^$k:.*|$k: $v|" "$esp"
+    else
+      sudo sed -i "1i $k: $v" "$esp"
+    fi
+  done
+}
+step "Limine: port header settings (default_entry, hash_mismatch_panic)" port_limine_header
+
+step "Plymouth: pure-black splash (scripts/splash)" sudo bash scripts/splash
+step "Snapper: timeline config (scripts/snapshots)" sudo bash scripts/snapshots
+
+vpn_watchdog() { (cd system/vpn && sudo ./install.sh); }
+step "AmneziaVPN suspend/resume watchdog" vpn_watchdog
+
+fuzz_guard() {
+  install -m 755 system/fuzzers/fuzz-thermal-guard.sh "$HOME/.local/bin/fuzz-thermal-guard.sh" || return 1
+  mkdir -p "$HOME/.config/systemd/user"
+  cp -f system/fuzzers/fuzz-thermal-guard.service "$HOME/.config/systemd/user/" || return 1
+  systemctl --user daemon-reload
+  # intentionally NOT enabled — matches the source machine; enable per fuzzing session
+}
+step "Install fuzz-thermal-guard (installed, not enabled)" fuzz_guard
+
+enable_services() {
+  sudo systemctl enable --now docker.service earlyoom.service ufw.service || return 1
+  sudo usermod -aG docker "$USER" || true
+  systemctl --user enable --now omarchy-battery-monitor.timer 2>/dev/null || true
+}
+step "Enable services (docker, earlyoom, ufw, battery monitor)" enable_services
+
+# espanso lives masked on this setup; it's toggled per-session via the hypr
+# keybind (espanso-toggle.sh), never on boot.
+step "Espanso: mask autostart (toggled on demand)" bash scripts/misc/disable-espanso
+
+# ---------------------------------------------------------------------------
+# 8. wrap-up
+# ---------------------------------------------------------------------------
+rmdir "$BACKUP" 2>/dev/null || true   # drop backup dir if nothing was backed up
+echo
+say "DONE."
+[ -d "$BACKUP" ] && echo "Overwritten originals backed up in: $BACKUP"
+cat <<'EOF'
+
+Manual follow-ups (can't be automated):
+  * espanso snippets: copy ~/.config/espanso/match/*.yml from the old machine
+    (they hold personal data and are deliberately NOT in this public repo)
+  * Vimium: import config/vimium/options.json in the extension's options page
+  * JetBrains: import config/jetbrains/settings.zip via the IDE
+  * ~/v media: fill TODO_URLs in tools/init-v/recreate-v.sh, then run it
+  * Reboot: docker group, hyprland defaults, boot theme, first-login theme finisher
+
+EOF
+if [ "${#FAILURES[@]}" -gt 0 ]; then
+  warn "Steps that failed (${#FAILURES[@]}):"
+  printf '    - %s\n' "${FAILURES[@]}" >&2
+  exit 1
+fi
+say "Everything applied cleanly. Reboot when ready."
