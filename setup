@@ -190,6 +190,13 @@ apply_theme() {
 }
 step "Apply theme: $THEME + $WALLPAPER wallpaper" apply_theme
 
+# Hide GNOME/libadwaita titlebar buttons (min/max/close) — we use Hyprland's
+# own window controls. Session-only gsettings; re-applied by the finisher below.
+set_wm_prefs() {
+  gsettings set org.gnome.desktop.wm.preferences button-layout ''
+}
+step "Set GNOME wm button-layout (empty)" set_wm_prefs
+
 # First-login finisher: re-applies the theme inside a real session (so
 # gsettings/chromium/vscode theming land), then disables itself.
 install_finisher() {
@@ -198,6 +205,7 @@ install_finisher() {
 export OMARCHY_PATH="\$HOME/.local/share/omarchy"
 export PATH="\$OMARCHY_PATH/bin:\$PATH"
 omarchy-theme-set "$THEME" || true
+gsettings set org.gnome.desktop.wm.preferences button-layout '' || true
 bg="\$HOME/.config/omarchy/current/theme/backgrounds/$WALLPAPER"
 [ -e "\$bg" ] && ln -nsf "\$bg" "\$HOME/.config/omarchy/current/background"
 pkill -x swaybg 2>/dev/null
